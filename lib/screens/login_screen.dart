@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/usuario.dart';
 import '../services/db_service.dart';
-import '../theme/app_colors.dart';
-import '../theme/app_theme.dart';
 import '../services/theme_service.dart';
 import 'crear_usuario_screen.dart';
 import 'home_screen.dart';
@@ -21,7 +19,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _cargando = false;
   bool _mostrarClave = false;
   String? _error;
-  int _temaSeleccionado = 0;
 
   @override
   void dispose() {
@@ -102,7 +99,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _irAHome(Usuario usuario) {
-    ThemeService.setThemeByIndex(_temaSeleccionado);
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => HomeScreen(usuario: usuario)),
@@ -125,95 +121,95 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final temaActual = AppThemeOptions.getThemeByIndex(_temaSeleccionado);
-    final theme = AppTheme.getThemeData(
-      temaActual,
-      temaActual.name == 'Dark Moderno',
-    );
+    final colores = ThemeService.currentTheme;
 
-    return Theme(
-      data: theme,
-      child: Scaffold(
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 24),
-                const Text(
-                  'Bienvenido a GeoRuta',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            children: [
+              const SizedBox(height: 48),
+              // Logo de la app (misma forma que el icono launch)
+              _AppLogo(primary: colores.primary, secondary: colores.secondary),
+              const SizedBox(height: 8),
+              Text(
+                'GeoRuta',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: colores.primary,
                 ),
-                const SizedBox(height: 32),
-                const Text(
-                  'Selecciona un color:',
-                  style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Tus rutas, siempre contigo',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: colores.primary.withAlpha(180),
                 ),
-                const SizedBox(height: 12),
-                _SelectorColores(
-                  seleccionado: _temaSeleccionado,
-                  onSelect: (index) =>
-                      setState(() => _temaSeleccionado = index),
+              ),
+              const SizedBox(height: 40),
+              TextField(
+                controller: _nombreController,
+                textCapitalization: TextCapitalization.none,
+                decoration: const InputDecoration(
+                  labelText: 'Usuario',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person),
                 ),
-                const SizedBox(height: 24),
-                TextField(
-                  controller: _nombreController,
-                  textCapitalization: TextCapitalization.none,
-                  decoration: const InputDecoration(
-                    labelText: 'Usuario',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
-                  ),
-                  onSubmitted: (_) => _iniciarSesion(),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _claveController,
-                  obscureText: !_mostrarClave,
-                  decoration: InputDecoration(
-                    labelText: 'Contrasena',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock),
-                    suffixIcon: IconButton(
-                      onPressed: () =>
-                          setState(() => _mostrarClave = !_mostrarClave),
-                      icon: Icon(
-                        _mostrarClave ? Icons.visibility_off : Icons.visibility,
-                      ),
+                onSubmitted: (_) => _iniciarSesion(),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _claveController,
+                obscureText: !_mostrarClave,
+                decoration: InputDecoration(
+                  labelText: 'Contrasena',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lock),
+                  suffixIcon: IconButton(
+                    onPressed: () =>
+                        setState(() => _mostrarClave = !_mostrarClave),
+                    icon: Icon(
+                      _mostrarClave ? Icons.visibility_off : Icons.visibility,
                     ),
-                    errorText: _error,
                   ),
-                  onSubmitted: (_) => _iniciarSesion(),
+                  errorText: _error,
                 ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: _cargando ? null : _iniciarSesion,
-                    icon: _cargando
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.login),
-                    label: Text(_cargando ? 'Entrando...' : 'ENTRAR'),
-                  ),
+                onSubmitted: (_) => _iniciarSesion(),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _cargando ? null : _iniciarSesion,
+                  icon: _cargando
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.login),
+                  label: Text(_cargando ? 'Entrando...' : 'ENTRAR'),
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: OutlinedButton.icon(
-                    onPressed: _cargando ? null : _irACrearUsuario,
-                    icon: const Icon(Icons.person_add),
-                    label: const Text('CREAR NUEVO USUARIO'),
-                  ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: _cargando ? null : _irACrearUsuario,
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('CREAR NUEVO USUARIO'),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 32),
+            ],
           ),
         ),
       ),
@@ -221,46 +217,58 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class _SelectorColores extends StatelessWidget {
-  final int seleccionado;
-  final Function(int) onSelect;
+/// Widget que representa el logo de la app, inspirado en el icono launch.
+/// Muestra un pin de ubicación blanco sobre un círculo azul,
+/// con una línea naranja decorativa debajo (como la ruta en el icono).
+class _AppLogo extends StatelessWidget {
+  final Color primary;
+  final Color secondary;
 
-  const _SelectorColores({required this.seleccionado, required this.onSelect});
+  const _AppLogo({required this.primary, required this.secondary});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(AppThemeOptions.themes.length, (index) {
-        final tema = AppThemeOptions.themes[index];
-        final esSeleccionado = index == seleccionado;
-        return GestureDetector(
-          onTap: () => onSelect(index),
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            width: esSeleccionado ? 50 : 40,
-            height: esSeleccionado ? 50 : 40,
-            decoration: BoxDecoration(
-              color: tema.primary,
-              shape: BoxShape.circle,
-              border: esSeleccionado
-                  ? Border.all(color: Colors.white, width: 3)
-                  : null,
-              boxShadow: esSeleccionado
-                  ? [
-                      BoxShadow(
-                        color: tema.primary.withAlpha(128),
-                        blurRadius: 8,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: esSeleccionado
-                ? Icon(Icons.check, color: Colors.white, size: 24)
-                : null,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Círculo azul con pin blanco
+        Container(
+          width: 100,
+          height: 100,
+          decoration: BoxDecoration(
+            color: primary,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: primary.withAlpha(80),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-        );
-      }),
+          child: const Icon(
+            Icons.location_on,
+            size: 52,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Línea decorativa naranja (representa la ruta del icono launch)
+        Container(
+          width: 60,
+          height: 3,
+          decoration: BoxDecoration(
+            color: secondary,
+            borderRadius: BorderRadius.circular(2),
+            boxShadow: [
+              BoxShadow(
+                color: secondary.withAlpha(100),
+                blurRadius: 4,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

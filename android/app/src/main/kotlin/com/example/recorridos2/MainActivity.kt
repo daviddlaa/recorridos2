@@ -13,6 +13,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Binder
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
@@ -35,13 +36,19 @@ class MainActivity : FlutterActivity() {
     private var eventSink: EventChannel.EventSink? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
+    // Timer de auto-stop nativo (funciona incluso en background)
+    private var duracionMinutos: Int = 0
+    private var tiempoInicio: Long = 0
+    private var autoStopHandler: Handler? = null
+    private var autoStopRunnable: Runnable? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         
         createNotificationChannel()
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
-        // Setup event channel for location updates
+        // Setup event channel for location updates + control events
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL).setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -57,11 +64,18 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startForegroundService" -> {
+                    duracionMinutos = call.argument<Int>("duracion") ?: 0
+                    tiempoInicio = System.currentTimeMillis()
                     startForegroundService()
                     result.success(true)
                 }
                 "stopForegroundService" -> {
                     stopForegroundService()
+                    result.success(true)
+                }
+                "actualizarTiempo" -> {
+                    val segundos = call.argument<Int>("segundos") ?: 0
+                    actualizarNotificacionConTiempo(segundos)
                     result.success(true)
                 }
                 "updateNotification" -> {
@@ -79,7 +93,7 @@ class MainActivity : FlutterActivity() {
         if (isForegroundServiceRunning) return
         isForegroundServiceRunning = true
         
-        // Show notification
+        // Show notification with time context
         val intent = Intent(this, MainActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         val pendingIntent = PendingIntent.getActivity(
@@ -90,7 +104,7 @@ class MainActivity : FlutterActivity() {
         )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("GeoRuta")
+            .setContentTitle("GeoRuta - Grabando")
             .setContentText("Grabando ubicación en segundo plano...")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)
@@ -103,7 +117,7 @@ class MainActivity : FlutterActivity() {
         val manager = getSystemService(NotificationManager::class.java)
         manager?.notify(NOTIFICATION_ID, notification)
         
-// Acquire wake lock - 4 horas para grabaciones largas
+        // Acquire wake lock - 4 horas para grabaciones largas
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
@@ -113,11 +127,19 @@ class MainActivity : FlutterActivity() {
         
         // Start location tracking
         startLocationUpdates()
+
+        // Iniciar auto-stop nativo si hay duración configurada
+        if (duracionMinutos > 0) {
+            iniciarAutoStop()
+        }
     }
 
     private fun stopForegroundService() {
         if (!isForegroundServiceRunning) return
         isForegroundServiceRunning = false
+        
+        // Detener auto-stop
+        detenerAutoStop()
         
         // Stop location tracking
         stopLocationUpdates()
@@ -171,10 +193,43 @@ class MainActivity : FlutterActivity() {
         locationManager?.removeUpdates(locationListener)
     }
 
-private val locationListener = object : LocationListener {
+    // Timer nativo para auto-stop en background
+    private fun iniciarAutoStop() {
+        detenerAutoStop()
+        autoStopHandler = Handler(Looper.getMainLooper())
+        autoStopRunnable = Runnable {
+            if (isForegroundServiceRunning) {
+                // Enviar evento de tiempo expirado a Dart
+                val event = HashMap<String, Any>()
+                event["type"] = "time_expired"
+                try {
+                    eventSink?.success(event)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                
+                // Actualizar notificación antes de detener
+                actualizarNotificacionConTiempo(0)
+                
+                // Auto-stop: detener servicio nativo
+                stopForegroundService()
+            }
+        }
+        // PostDelayed con la duración en milisegundos
+        autoStopHandler?.postDelayed(autoStopRunnable!!, duracionMinutos * 60 * 1000L)
+    }
+
+    private fun detenerAutoStop() {
+        autoStopRunnable?.let { autoStopHandler?.removeCallbacks(it) }
+        autoStopRunnable = null
+        autoStopHandler = null
+    }
+
+    private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             if (location != null && eventSink != null) {
                 val locationData = HashMap<String, Any>()
+                locationData["type"] = "location"
                 locationData["latitude"] = location.latitude
                 locationData["longitude"] = location.longitude
                 locationData["accuracy"] = location.accuracy
@@ -195,6 +250,40 @@ private val locationListener = object : LocationListener {
         override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
         override fun onProviderEnabled(provider: String) {}
         override fun onProviderDisabled(provider: String) {}
+    }
+
+    private fun actualizarNotificacionConTiempo(segundosRestantes: Int) {
+        if (!isForegroundServiceRunning) return
+        
+        val tiempoStr = formatearTiempo(segundosRestantes.toLong())
+        val intent = Intent(this, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val contenido = if (segundosRestantes > 0) {
+            "Grabando: $tiempoStr restante"
+        } else {
+            "Tiempo completado! Deteniendo..."
+        }
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("GeoRuta - Grabando")
+            .setContentText(contenido)
+            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setFullScreenIntent(pendingIntent, true)
+            .build()
+            
+        val manager = getSystemService(NotificationManager::class.java)
+        manager?.notify(NOTIFICATION_ID, notification)
     }
 
     private fun updateNotification(title: String, text: String) {
@@ -238,9 +327,22 @@ private val locationListener = object : LocationListener {
             manager?.createNotificationChannel(channel)
         }
     }
+
+    private fun formatearTiempo(segundos: Long): String {
+        val horas = segundos / 3600
+        val mins = (segundos % 3600) / 60
+        val segs = segundos % 60
+        
+        return if (horas > 0) {
+            String.format("%02d:%02d:%02d", horas, mins, segs)
+        } else {
+            String.format("%02d:%02d", mins, segs)
+        }
+    }
     
     override fun onDestroy() {
         super.onDestroy()
+        detenerAutoStop()
         stopLocationUpdates()
         wakeLock?.let {
             if (it.isHeld) it.release()

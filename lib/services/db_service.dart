@@ -279,6 +279,29 @@ class DbService {
     return List.generate(maps.length, (i) => PuntoGps.fromMap(maps[i]));
   }
 
+  /// Carga puntos de múltiples recorridos en UNA sola consulta SQL.
+  /// Retorna un mapa: recorridoId -> lista de puntos.
+  Future<Map<int, List<PuntoGps>>> getPuntosByRecorridoIds(
+    List<int> ids,
+  ) async {
+    if (ids.isEmpty) return {};
+    final db = await database;
+
+    // Construir placeholders (?, ?, ?...)
+    final placeholders = ids.map((_) => '?').join(',');
+    final List<Map<String, dynamic>> maps = await db.rawQuery(
+      'SELECT * FROM puntos_gps WHERE recorrido_id IN ($placeholders) ORDER BY recorrido_id, fecha_hora ASC',
+      ids,
+    );
+
+    final Map<int, List<PuntoGps>> resultado = {};
+    for (final map in maps) {
+      final punto = PuntoGps.fromMap(map);
+      resultado.putIfAbsent(punto.recorridoId, () => []).add(punto);
+    }
+    return resultado;
+  }
+
   Future<int> deletePuntosByRecorridoId(int recorridoId) async {
     final db = await database;
     return await db.delete(

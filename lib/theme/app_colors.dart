@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Definición de los 4 temas de color disponibles
+/// Definición de los temas de color disponibles
 class AppColors {
   final Color primary;
   final Color secondary;
@@ -21,17 +21,17 @@ class AppColors {
   });
 }
 
-/// Los 4 temas disponibles
+/// Los temas disponibles (solo el primero se usa activamente)
 class AppThemeOptions {
   static const List<AppColors> themes = [
     AppColors(
-      primary: Color(0xFF2E7D32), // Verde bosque
-      secondary: Color(0xFFD84315), // Naranja terracotta
+      primary: Color(0xFF1976D2), // Azul del icono launch
+      secondary: Color(0xFFFF5722), // Naranja ruta del icono launch
       background: Color(0xFFF5F5F5),
       surface: Colors.white,
       error: Color(0xFFB00020),
-      name: 'Verde Naturaleza',
-      icon: '🌲',
+      name: 'GeoRuta',
+      icon: '📍',
     ),
     AppColors(
       primary: Color(0xFF1565C0), // Azul profundo
